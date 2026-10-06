@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>壁纸详情 — Design World</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fg:#f2f2f2;
+    --muted:rgba(242,242,242,.62);
+    --line:rgba(255,255,255,.14);
+    --pad-x:clamp(18px,6vw,110px);
+  }
+  * { margin:0; padding:0; box-sizing:border-box }
+  html { min-height:100%; background:#151518 }
+  html, body {
+    min-height:100%;
+    color:var(--fg); font-family:'Poppins',sans-serif; -webkit-font-smoothing:antialiased;
+    cursor:url('assets/cursor/arrow-white.png') 7 5, auto;
+  }
+  body { background:transparent }
+  a { color:inherit; text-decoration:none; cursor:url('assets/cursor/touch-white.png') 10 2, pointer }
+  button { font-family:inherit; color:inherit; background:none; border:none; cursor:url('assets/cursor/touch-white.png') 10 2, pointer }
+
+  /* ---------- Background: the wallpaper itself, darkened ---------- */
+  .bg-layer {
+    position:fixed; inset:0; z-index:-2; overflow:hidden;
+  }
+  .bg-layer img, .bg-layer video {
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover; display:block;
+  }
+  .bg-mask {
+    position:fixed; inset:0; z-index:-1;
+    background:linear-gradient(180deg, rgba(12,12,15,.30), rgba(12,12,15,.55));
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar {
+    position:fixed; top:0; left:0; right:0; height:76px; z-index:100;
+    display:flex; align-items:center; padding:0 var(--pad-x);
+  }
+  .topbar::before {
+    content:''; position:absolute; inset:0; z-index:-1;
+    background:#141417;
+    -webkit-backdrop-filter:blur(20px) saturate(140%); backdrop-filter:blur(20px) saturate(140%);
+    -webkit-mask:linear-gradient(to bottom, rgba(0,0,0,.75), rgba(0,0,0,.04));
+    mask:linear-gradient(to bottom, rgba(0,0,0,.75), rgba(0,0,0,.04));
+  }
+  .back-btn {
+    display:inline-flex; align-items:center; gap:7px;
+    font-size:13.5px; font-weight:500;
+    padding:9px 16px; border:1px solid rgba(255,255,255,.22); border-radius:999px;
+    transition:background .25s,color .25s,border-color .25s;
+  }
+  .back-btn:hover { background:#fff; color:#111; border-color:#fff }
+  .back-btn svg { width:14px; height:14px }
+  .brand {
+    position:absolute; left:50%; transform:translateX(-50%);
+    display:flex; align-items:center; gap:10px; font-size:19px; font-weight:600;
+  }
+  .brand svg { width:28px; height:28px }
+  .brand span i { font-weight:400; font-style:normal; color:var(--muted) }
+
+  /* ---------- Layout ---------- */
+  .detail-main {
+    padding:calc(76px + 26px) var(--pad-x) 70px;
+    min-height:100vh;
+    display:flex; flex-direction:column; justify-content:center;
+  }
+  .preview {
+    display:flex; align-items:center; gap:clamp(28px,5vw,70px);
+    flex-wrap:wrap;
+  }
+  .device-col {
+    flex:1 1 420px; min-width:0;
+    display:flex; justify-content:center;
+  }
+  .info-col {
+    flex:1 1 380px; min-width:0; max-width:520px;
+  }
+
+  /* ---------- MacBook mockup ---------- */
+  .macbook { width:100%; max-width:640px }
+  .macbook .screen {
+    position:relative;
+    background:#0a0a0c;
+    border:10px solid #1b1b1e;
+    border-radius:16px;
+    overflow:hidden;
+    aspect-ratio:16/10;
+    box-shadow:0 30px 60px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.06);
+  }
+  .macbook .notch {
+    position:absolute; top:0; left:50%; transform:translateX(-50%);
+    width:84px; height:18px; background:#000;
+    border-radius:0 0 11px 11px; z-index:3;
+  }
+  .macbook .screen img, .macbook .screen video {
+    width:100%; height:100%; object-fit:cover; display:block;
+  }
+  .macbook .base {
+    height:13px; margin:0 -5%;
+    background:linear-gradient(#c2c2c8,#8b8b92 60%,#6f6f76);
+    border-radius:0 0 60px 60px/0 0 14px 14px;
+    position:relative;
+  }
+  .macbook .base::after {
+    content:''; position:absolute; bottom:0; left:50%; transform:translateX(-50%);
+    width:90px; height:5px; background:rgba(0,0,0,.35); border-radius:0 0 8px 8px;
+  }
+
+  /* ---------- Phone mockup ---------- */
+  .phone { width:100%; max-width:270px }
+  .phone .frame {
+    position:relative;
+    background:#0a0a0c;
+    border:9px solid #1b1b1e;
+    border-radius:44px;
+    overflow:hidden;
+    aspect-ratio:9/19.3;
+    box-shadow:0 30px 60px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.06);
+  }
+  .phone .island {
+    position:absolute; top:11px; left:50%; transform:translateX(-50%);
+    width:86px; height:23px; background:#000; border-radius:999px; z-index:3;
+  }
+  .phone .frame img, .phone .frame video {
+    width:100%; height:100%; object-fit:cover; display:block;
+  }
+
+  /* generic window for other / dynamic-bg */
+  .window {
+    width:100%; max-width:640px;
+    background:#1b1b1e; border-radius:16px; padding:10px;
+    box-shadow:0 30px 60px rgba(0,0,0,.55);
+  }
+  .window .inner {
+    position:relative; overflow:hidden; border-radius:9px; aspect-ratio:16/10;
+  }
+  .window .inner img, .window .inner video { width:100%; height:100%; object-fit:cover; display:block }
+
+  /* Entrance: all content is visible by default. A lightweight fade is applied
+     via JS only when it is safe (no large video blocking the renderer); if it
+     ever fails, the default visible state keeps everything on screen. */
+  .fade-in { opacity:0; transform:translateY(24px); }
+  .fade-in.go {
+    opacity:1; transform:none;
+    transition:opacity .65s cubic-bezier(.2,.7,.3,1), transform .65s cubic-bezier(.2,.7,.3,1);
+  }
+
+  /* ---------- Info card ---------- */
+  .info-card {
+    background:rgba(40,40,45,.55);
+    -webkit-backdrop-filter:blur(26px) saturate(150%); backdrop-filter:blur(26px) saturate(150%);
+    border:1px solid var(--line); border-radius:22px;
+    padding:30px 30px 28px;
+    box-shadow:0 24px 60px rgba(0,0,0,.45);
+  }
+  .info-card .kind {
+    display:inline-block; font-size:11.5px; font-weight:500; letter-spacing:.04em;
+    color:#fff; padding:5px 12px; border-radius:999px;
+    background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.22);
+    margin-bottom:14px;
+  }
+  .info-card h1 {
+    font-size:clamp(22px,3vw,29px); font-weight:700; line-height:1.25;
+    margin-bottom:14px;
+  }
+  .tag-row { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:22px }
+  .tag-row .t {
+    font-size:11.5px; font-weight:500; color:#fff;
+    padding:6px 11px; border-radius:999px;
+    background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.18);
+  }
+  .meta-grid {
+    display:grid; grid-template-columns:1fr 1fr; gap:13px 18px;
+    padding:18px 0; margin-bottom:22px;
+    border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+  }
+  .meta .k { font-size:11.5px; color:var(--muted); display:block; margin-bottom:4px }
+  .meta .v { font-size:14px; font-weight:500 }
+
+  .btn-row { display:flex; flex-wrap:wrap; gap:12px }
+  .btn-download {
+    flex:1 1 180px;
+    display:inline-flex; align-items:center; justify-content:center; gap:9px;
+    background:rgba(0,0,0,.55); color:#fff;
+    font-size:14.5px; font-weight:600;
+    padding:13px 22px; border-radius:50px;
+    border:1.6px solid #fff;
+    box-shadow:0 0 14px rgba(255,241,241,.85);
+    transition:box-shadow .25s, background .25s;
+  }
+  .btn-download:hover { box-shadow:0 0 22px rgba(255,241,241,1); background:rgba(0,0,0,.65) }
+  .btn-download svg { width:16px; height:16px }
+  .btn-ghost {
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    font-size:14px; font-weight:500;
+    padding:13px 20px; border-radius:50px;
+    border:1px solid rgba(255,255,255,.28); color:#fff;
+    transition:background .2s, border-color .2s;
+  }
+  .btn-ghost:hover { background:rgba(255,255,255,.1); border-color:#fff }
+  .btn-ghost svg { width:15px; height:15px }
+
+  .error-box {
+    text-align:center; padding:120px 20px; color:var(--muted);
+  }
+  .error-box a { color:#fff; border:1px solid rgba(255,255,255,.3); padding:10px 20px; border-radius:999px; margin-top:18px; display:inline-block }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width:860px) {
+    .preview { gap:34px }
+    .device-col, .info-col { flex:1 1 100% }
+    .info-col { max-width:560px; margin:0 auto; width:100% }
+    .macbook, .window { max-width:560px }
+    .phone { max-width:230px }
+  }
+  @media (max-width:480px) {
+    .info-card { padding:24px 20px }
+    .brand span i { display:none }
+    .meta-grid { grid-template-columns:1fr }
+  }
+</style>
+</head>
+<body>
+
+<!-- Background (the clicked wallpaper) -->
+<div class="bg-layer" id="bgLayer"></div>
+<div class="bg-mask"></div>
+
+<!-- Top bar -->
+<header class="topbar">
+  <a href="wallpaper.html" class="back-btn" id="backBtn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+    <span>返回壁纸库</span>
+  </a>
+  <div class="brand">
+    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.2" stroke="#f2f2f2" stroke-width="1.6"/><path d="M3.6 13.4c3-1.2 5.8-1.2 8.4 0s5.4 1.2 8.4 0" stroke="#f2f2f2" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="10.6" r="2.1" fill="#f2f2f2"/></svg>
+    <span><b>Design</b> <i>壁纸详情</i></span>
+  </div>
+</header>
+
+<main class="detail-main" id="detailMain"></main>
+
+<script src="wallpapers-data.js"></script>
+<script>
+  const DATA = (window.WALLPAPER_MANIFEST || []);
+  const CAT_LABELS = {
+    'pc-static':'电脑壁纸 · 静态',
+    'pc-dynamic':'电脑壁纸 · 动态',
+    'phone-static':'手机壁纸 · 静态',
+    'phone-dynamic':'手机壁纸 · 动态',
+    'dynamic-bg':'动态背景',
+    'other':'其他'
+  };
+
+  function isVideo(w) {
+    if (w.type === 'video') return true;
+    return /\.(mp4|webm|ogv|mov|m4v)(\?|$)/i.test(w.src || w.original || '');
+  }
+  function mediaSrc(w) { return w.original || w.src; }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  /* device mockup that holds the example image/video */
+  function deviceHTML(w) {
+    const src = esc(mediaSrc(w));
+    const cat = w.category || '';
+    const media = isVideo(w)
+      ? '<video src="' + src + '" muted loop autoplay playsinline webkit-playsinline preload="auto" disablepictureinpicture></video>'
+      : '<img src="' + src + '" alt="' + esc(w.title) + '">';
+
+    if (cat.indexOf('phone') === 0) {
+      return '<div class="phone"><div class="frame"><div class="island"></div>' + media + '</div></div>';
+    }
+    if (cat.indexOf('pc') === 0) {
+      return '<div class="macbook"><div class="screen"><div class="notch"></div>' + media +
+             '</div><div class="base"></div></div>';
+    }
+    return '<div class="window"><div class="inner">' + media + '</div></div>';
+  }
+
+  function render() {
+    const id = parseInt(new URLSearchParams(location.search).get('id'), 10);
+    const w = DATA[id];
+    const main = document.getElementById('detailMain');
+
+    if (!w) {
+      document.getElementById('bgLayer').innerHTML = '';
+      main.innerHTML = '<div class="error-box">未找到该壁纸。<br><a href="wallpaper.html">返回壁纸库</a></div>';
+      document.title = '未找到 — Design World';
+      return;
+    }
+
+    /* Remember this PC wallpaper so wallpaper.html keeps it as the page
+       background after returning; it stays until the next PC wallpaper is
+       viewed (detail.html overwrites the value). */
+    if (w.category === 'pc-static' || w.category === 'pc-dynamic') {
+      try { sessionStorage.setItem('lastPcWallpaper', String(id)); } catch (e) {}
+    }
+
+    /* background: cover image; for video, show one static frame (the video
+       itself only plays inside the device mockup — ref: haowallpaper) */
+    const bg = document.getElementById('bgLayer');
+    if (isVideo(w)) {
+      bg.innerHTML = '<video muted playsinline webkit-playsinline preload="auto"' +
+        ' disablepictureinpicture src="' + esc(mediaSrc(w)) + '"></video>';
+      const v = bg.querySelector('video');
+      // once frames are available, seek to a representative mid-shot (avoid black frames)
+      const pickFrame = () => {
+        const t = isFinite(v.duration) ? Math.min(v.duration * 0.5, 6) : 3;
+        try { v.currentTime = t; } catch (e) {}
+      };
+      v.addEventListener('loadeddata', pickFrame, { once:true });
+    } else {
+      bg.innerHTML = '<img src="' + esc(mediaSrc(w)) + '" alt="">';
+    }
+
+    document.title = w.title + ' — Design World';
+
+    const tags = (w.tags && w.tags.length ? w.tags : [w.tag]).filter(Boolean);
+    const resolution = (w.w && w.h) ? (w.w + ' × ' + w.h) : '动态壁纸';
+    const kind = CAT_LABELS[w.category] || '壁纸';
+    const fileType = isVideo(w) ? '视频（MP4）' : '图片（JPG/PNG）';
+
+    main.innerHTML =
+      '<div class="preview">' +
+        '<div class="device-col">' + deviceHTML(w) + '</div>' +
+        '<div class="info-col"><div class="info-card">' +
+          '<span class="kind">' + esc(kind) + '</span>' +
+          '<h1>' + esc(w.title) + '</h1>' +
+          '<div class="tag-row">' +
+            tags.map(t => '<span class="t">' + esc(t) + '</span>').join('') +
+          '</div>' +
+          '<div class="meta-grid">' +
+            '<div class="meta"><span class="k">分辨率</span><span class="v">' + esc(resolution) + '</span></div>' +
+            '<div class="meta"><span class="k">文件类型</span><span class="v">' + esc(fileType) + '</span></div>' +
+            '<div class="meta"><span class="k">分类</span><span class="v">' + esc(kind) + '</span></div>' +
+            '<div class="meta"><span class="k">来源</span><span class="v">本地壁纸库</span></div>' +
+          '</div>' +
+          '<div class="btn-row">' +
+            '<a class="btn-download" href="' + esc(mediaSrc(w)) + '" download="' + esc((mediaSrc(w).split('/').pop()) || 'wallpaper') + '">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-5-5m5 5l5-5M5 21h14"/></svg>' +
+              '<span class="dl-label">下载壁纸</span>' +
+            '</a>' +
+            '<a class="btn-ghost" href="' + esc(mediaSrc(w)) + '" target="_blank" rel="noopener">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14L21 3M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>' +
+              '在线预览' +
+            '</a>' +
+          '</div>' +
+        '</div></div>' +
+      '</div>';
+
+    /* Entrance: mark the targets hidden synchronously (before first paint),
+       then reveal them once the renderer is free. The mockup video is the
+       only video that plays. */
+    const targets = main.querySelectorAll('.macbook, .phone, .window, .info-card');
+    targets.forEach(t => {
+      t.classList.add('fade-in');
+      if (t.classList.contains('info-card')) t.style.transitionDelay = '.08s';
+    });
+
+    const mockVideos = main.querySelectorAll('video');
+    mockVideos.forEach(v => {
+      const p = v.play(); if (p && p.catch) p.catch(()=>{});
+    });
+
+    let revealed = false;
+    function reveal() {
+      if (revealed) return;
+      revealed = true;
+      targets.forEach(t => t.classList.add('go'));
+    }
+    if (mockVideos.length === 0) {
+      requestAnimationFrame(() => requestAnimationFrame(reveal));
+    } else {
+      mockVideos.forEach(v => v.addEventListener('playing', reveal, { once:true }));
+    }
+    /* hard fallback: after 2.5s, anything still hidden is forced visible */
+    setTimeout(() => {
+      reveal();
+      targets.forEach(t => {
+        if (getComputedStyle(t).opacity !== '1') {
+          t.classList.remove('fade-in');
+          t.style.transition = 'none';
+          t.style.opacity = '1';
+          t.style.transform = 'none';
+        }
+      });
+    }, 2500);
+  }
+
+  /* Back button: only step back to the exact previous page in history, so
+     the wallpaper library restores its previous scroll position, filters
+     and pagination. If the detail page was opened directly (no referrer,
+     e.g. pasted URL), fall back to a direct jump. */
+  document.getElementById('backBtn').addEventListener('click', (e) => {
+    e.preventDefault();
+    if (document.referrer) {
+      history.back();
+    } else {
+      location.href = 'wallpaper.html';
+    }
+  });
+
+  /* ---------- Reliable file download (desktop + modern mobile) ----------
+     The plain download attribute is ignored by some mobile browsers and by
+     cross-origin setups (the file just opens in a tab). Fetch the file as a
+     Blob and force an object-URL download instead; on failure (e.g. the
+     page was opened via file://), fall back to opening the direct link. */
+  function triggerBlobDownload(blob, filename) {
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl; a.download = filename; a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+  }
+
+  async function downloadWallpaper(btn) {
+    const url = btn.href;
+    let filename = btn.getAttribute('download') || '';
+    if (!filename) {
+      try { filename = decodeURIComponent(url.split('/').pop().split('?')[0]); }
+      catch (e) { filename = 'wallpaper'; }
+    }
+    const label = btn.querySelector('.dl-label');
+    const original = label ? label.textContent : '';
+    if (label) label.textContent = '准备下载…';
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const blob = await resp.blob();
+      triggerBlobDownload(blob, filename);
+      if (label) label.textContent = '下载已开始';
+    } catch (err) {
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.target = '_blank';
+      a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+    } finally {
+      setTimeout(() => { if (label) label.textContent = original; }, 2000);
+    }
+  }
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-download');
+    if (!btn) return;
+    e.preventDefault();
+    if (btn.dataset.busy === '1') return;
+    btn.dataset.busy = '1';
+    downloadWallpaper(btn).finally(() =>
+      setTimeout(() => { btn.dataset.busy = ''; }, 1500));
+  });
+
+  render();
+</script>
+</body>
+</html>

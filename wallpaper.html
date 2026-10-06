@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>壁纸资源库 — Design World</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#27272a;
+    --panel:#333337;
+    --panel-2:#3d3d42;
+    --fg:#f2f2f2;
+    --muted:rgba(242,242,242,.55);
+    --line:rgba(255,255,255,.09);
+    --pad-x:clamp(20px,5vw,100px);
+  }
+  * { margin:0; padding:0; box-sizing:border-box }
+  html, body {
+    height:100%;
+    background:#2b2b2e url('assets/background/wallpaper-bg.jpg') center/cover fixed no-repeat;
+    color:var(--fg); font-family:'Poppins',sans-serif; -webkit-font-smoothing:antialiased;
+    cursor:url('assets/cursor/arrow-white.png') 7 5, auto;
+  }
+  body::before {
+    content:''; position:fixed; inset:0; z-index:-1; pointer-events:none;
+    background:linear-gradient(180deg, rgba(15,15,17,.08), rgba(15,15,17,.30));
+  }
+  /* persistent background layer: html keeps the default background image as
+     the fallback; body must stay transparent, otherwise body's background
+     paints over the negative z-index layer. Stacking:
+     html bg -> .persist-bg (-2) -> body::before darkening (-1) -> content */
+  body { background:transparent; }
+  .persist-bg {
+    position:fixed; inset:0; z-index:-2; overflow:hidden;
+  }
+  .persist-bg img, .persist-bg video {
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover; display:block;
+    filter:brightness(.65);
+  }
+  a { color:inherit; text-decoration:none; cursor:url('assets/cursor/touch-white.png') 10 2, pointer }
+  button { font-family:inherit; color:inherit; background:none; border:none; cursor:url('assets/cursor/touch-white.png') 10 2, pointer }
+  input { cursor:url('assets/cursor/touch-white.png') 10 2, pointer }
+
+  /* ---------- Top bar ---------- */
+  .topbar {
+    position:fixed; top:0; left:0; right:0; height:76px; z-index:100;
+    display:flex; align-items:center; padding:0 var(--pad-x);
+  }
+  /* gradient background layer: tint + blur both fade 68% (top) -> 10% (bottom); content stays crisp */
+  .topbar::before {
+    content:''; position:absolute; inset:0; z-index:-1;
+    background:#141417;
+    -webkit-backdrop-filter:blur(20px) saturate(140%); backdrop-filter:blur(20px) saturate(140%);
+    -webkit-mask:linear-gradient(to bottom, rgba(0,0,0,.75), rgba(0,0,0,.04));
+    mask:linear-gradient(to bottom, rgba(0,0,0,.75), rgba(0,0,0,.04));
+  }
+  .search-panel {
+    position:fixed; top:76px; left:50%; z-index:99;
+    width:min(620px,92vw);
+    display:flex; align-items:center; gap:10px;
+    padding:11px 16px;
+    background:rgba(42,42,47,.9);
+    -webkit-backdrop-filter:blur(24px) saturate(150%); backdrop-filter:blur(24px) saturate(150%);
+    border:1px solid rgba(255,255,255,.15); border-radius:15px;
+    box-shadow:0 20px 50px rgba(0,0,0,.5);
+    transform:translateX(-50%) translateY(-10px);
+    opacity:0; visibility:hidden; transition:.25s;
+  }
+  .search-panel.open { opacity:1; visibility:visible; transform:translateX(-50%) translateY(0) }
+  .search-ico { width:18px; height:18px; color:var(--muted); flex:none }
+  .search-panel input {
+    flex:1; min-width:0; background:none; border:none; outline:none;
+    color:#fff; font-size:14px; font-family:inherit;
+  }
+  .search-panel input::placeholder { color:var(--muted) }
+  .search-clear {
+    flex:none; width:26px; height:26px; border-radius:50%;
+    display:grid; place-items:center; color:var(--muted); transition:.2s;
+  }
+  .search-clear:hover { color:#fff; background:rgba(255,255,255,.1) }
+  .search-clear svg { width:15px; height:15px }
+  .back-btn {
+    display:inline-flex; align-items:center; gap:7px;
+    font-size:13.5px; font-weight:500;
+    padding:9px 16px; border:1px solid rgba(255,255,255,.22); border-radius:999px;
+    transition:background .25s,color .25s,border-color .25s;
+  }
+  .back-btn:hover { background:#fff; color:#111; border-color:#fff }
+  .back-btn svg { width:14px; height:14px }
+
+  .brand {
+    position:absolute; left:50%; transform:translateX(-50%);
+    display:flex; align-items:center; gap:10px; font-size:19px; font-weight:600; letter-spacing:.01em;
+  }
+  .brand svg { width:30px; height:30px }
+  .brand span b { font-weight:700 }
+  .brand span i { font-weight:400; font-style:normal; color:var(--muted) }
+  .topbar-right { margin-left:auto; display:flex; align-items:center; gap:10px }
+  .icon-btn {
+    width:38px; height:38px; border-radius:50%; display:grid; place-items:center;
+    color:var(--muted); transition:background .2s,color .2s;
+  }
+  .icon-btn:hover { background:rgba(255,255,255,.08); color:#fff }
+  .icon-btn svg { width:18px; height:18px }
+
+  /* ---------- Main grid ---------- */
+  main { padding:calc(76px + 10px) 0 150px }
+  .grid {
+    display:grid;
+    grid-template-columns:repeat(2, 1fr);
+    gap:20px;
+    padding:14px var(--pad-x) 0;
+  }
+  @media (min-width:700px)  { .grid { grid-template-columns:repeat(3, 1fr) } }
+  @media (min-width:1000px) { .grid { grid-template-columns:repeat(4, 1fr) } }
+
+  .card {
+    position:relative;
+    border-radius:16px; overflow:hidden;
+    background:rgba(255,255,255,.08);
+    border:0;
+    border-left:1px solid rgba(255,255,255,.40);
+    border-top:1px solid rgba(255,255,255,.40);
+    cursor:url('assets/cursor/arrow-white.png') 7 5, auto;
+    aspect-ratio:3 / 2;
+    box-shadow:
+      20px 20px 50px rgba(0,0,0,.50),
+      8px 8px 22px rgba(0,0,0,.30);
+    transition:box-shadow .35s;
+    will-change:transform;
+  }
+  .card:hover {
+    box-shadow:
+      26px 30px 64px rgba(0,0,0,.58),
+      12px 14px 30px rgba(0,0,0,.40);
+  }
+  .card img, .card video { width:100%; height:100%; object-fit:cover; display:block; }
+
+  /* ===== Phone (mobile) wallpapers — masonry, card height follows the real image/video ratio ===== */
+  .grid.phone-mode {
+    display:block;
+    column-count:4; column-gap:18px;
+    padding-left:62px;
+  }
+  @media(max-width:1300px){ .grid.phone-mode { column-count:3 } }
+  @media(max-width:900px) { .grid.phone-mode { column-count:2 } }
+  .grid.phone-mode .card {
+    width:100%;
+    break-inside:avoid; -webkit-column-break-inside:avoid; page-break-inside:avoid;
+    margin:0 0 18px;
+    aspect-ratio:auto;
+    border-radius:22px;
+    border-left:0; border-top:0;
+    box-shadow:10px 10px 20px 5px rgba(0,0,0,.50);
+  }
+  .grid.phone-mode .card:hover {
+    box-shadow:14px 16px 28px 7px rgba(0,0,0,.58);
+  }
+  .grid.phone-mode .card img,
+  .grid.phone-mode .card video { height:auto }
+
+  /* phone mode: pagination becomes a fixed vertical rail on the left */
+  .pagination.phone-rail {
+    position:fixed; left:13px; top:50%;
+    transform:translateY(-50%);
+    flex-direction:column; flex-wrap:nowrap; align-items:center; justify-content:flex-start;
+    gap:9px; padding:14px 7px;
+    z-index:98;
+    max-height:94vh; overflow:hidden;
+  }
+  .pagination.phone-rail .page-btn {
+    min-width:38px; width:38px; height:38px; padding:0; font-size:13px;
+  }
+  .pagination.phone-rail .page-ellipsis { padding:1px 0; line-height:1 }
+
+  /* hover overlay: tags + 前往 + stats */
+  .card-overlay {
+    position:absolute; inset:0; z-index:2;
+    display:flex; flex-direction:column;
+    padding:11px 12px;
+    opacity:0; visibility:hidden; transition:opacity .3s, visibility .3s;
+  }
+  .card:hover .card-overlay { opacity:1; visibility:visible }
+  .card-tags {
+    display:flex; flex-wrap:wrap; gap:6px;
+    transform:translateY(20px);
+    transition:transform .7s cubic-bezier(.2,.7,.3,1);
+  }
+  .card:hover .card-tags { transform:translateY(0) }
+  .tag-pill {
+    font-size:11px; font-weight:500; line-height:1; color:#fff;
+    padding:6px 10px; border-radius:999px;
+    background:rgba(255,255,255,.16); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+    border:1px solid rgba(255,255,255,.22);
+  }
+  .card-go {
+    position:absolute; left:50%; top:70%;
+    width:55%;
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    background:rgba(0,0,0,.35); color:#fff;
+    font-size:14px; font-weight:500;
+    padding:10px 0; border-radius:50px;
+    border:1.6px solid #fff;
+    box-shadow:0 0 10px rgba(255,241,241,1);
+    transform:translate(-50%, calc(-50% + 26px));
+    transition:transform .8s cubic-bezier(.2,.7,.3,1), box-shadow .25s;
+  }
+  .card:hover .card-go { transform:translate(-50%,-50%) }
+  .card-go:hover { box-shadow:0 0 15px rgba(255,241,241,1) }
+  .card-go svg { width:15px; height:15px }
+
+  .card-bar {
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .stat { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:rgba(255,255,255,.88) }
+  .stat svg { width:13px; height:13px }
+  .card.hidden { display:none }
+  .empty { grid-column:1 / -1; text-align:center; padding:90px 20px; color:var(--muted); font-size:15px; font-weight:300 }
+
+  /* ---------- Pagination ---------- */
+  .pagination {
+    display:flex; align-items:center; justify-content:center; flex-wrap:wrap;
+    gap:10px; padding:34px var(--pad-x) 6px;
+  }
+  .page-btn {
+    min-width:46px; height:46px; padding:0 8px;
+    border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
+    font-size:15px; font-weight:500; color:#fff; white-space:nowrap;
+    background:rgba(34,34,38,.82);
+    border:1px solid rgba(255,255,255,.13);
+    transition:background .2s, transform .15s, box-shadow .2s, border-color .2s;
+  }
+  .page-btn:hover { background:rgba(66,66,72,.92); transform:translateY(-2px) }
+  .page-btn.active {
+    background:rgba(50,50,56,.95);
+    border:2px solid rgba(255,255,255,.9);
+    box-shadow:0 0 16px rgba(255,255,255,.35);
+  }
+  .page-btn.arrow { border-style:dashed; border-color:rgba(255,255,255,.32) }
+  .page-btn:disabled { opacity:.35; transform:none; pointer-events:none }
+  .page-ellipsis { color:var(--muted); padding:0 3px; letter-spacing:2px; user-select:none }
+
+  /* ---------- Bottom floating filter dock ---------- */
+  .dock {
+    position:fixed; left:0; right:0; bottom:22px; margin:0 auto; z-index:100;
+    width:fit-content; min-width:min(680px,92vw);
+    background:rgba(50,50,55,.45); backdrop-filter:blur(26px) saturate(150%); -webkit-backdrop-filter:blur(26px) saturate(150%);
+    border:1px solid rgba(255,255,255,.13); border-radius:20px;
+    box-shadow:
+      0 0 44px rgba(0,0,0,.42),
+      0 22px 60px rgba(0,0,0,.50),
+      0 8px 22px rgba(0,0,0,.38),
+      0 -4px 18px rgba(0,0,0,.22);
+    padding:10px 14px;
+  }
+  .chips {
+    display:flex; align-items:center; gap:8px;
+    overflow-x:auto; scrollbar-width:none;
+    padding-bottom:8px; border-bottom:1px solid var(--line);
+  }
+  .chips::-webkit-scrollbar { display:none }
+  .chip {
+    flex:none; font-size:12.5px; font-weight:500; color:var(--muted);
+    padding:6px 13px; border-radius:999px; transition:.2s;
+  }
+  .chip:hover { color:#fff; background:rgba(255,255,255,.07) }
+  .chip.active { color:#111; background:#f4f4f5 }
+  .dock-settings { flex:none; width:30px; height:30px; border-radius:50%; display:grid; place-items:center;
+    color:var(--muted); margin-left:auto }
+  .dock-settings:hover { color:#fff; background:rgba(255,255,255,.08) }
+  .dock-settings svg { width:15px; height:15px }
+
+  .dock-row { display:flex; align-items:center; justify-content:space-around; gap:4px; padding-top:8px }
+  .dock-btn {
+    position:relative; display:inline-flex; align-items:center; gap:6px;
+    font-size:12.5px; font-weight:500; color:var(--muted);
+    padding:7px 12px; border-radius:9px; transition:.2s;
+  }
+  .dock-btn svg { width:14px; height:14px }
+  .dock-btn:hover, .dock-btn.active { color:#fff; background:rgba(255,255,255,.08) }
+
+  /* popover above dock buttons */
+  .popover {
+    position:absolute; bottom:calc(100% + 10px); left:50%; transform:translateX(-50%) translateY(6px);
+    min-width:170px; padding:8px;
+    background:rgba(42,42,47,.94); backdrop-filter:blur(24px) saturate(150%); -webkit-backdrop-filter:blur(24px) saturate(150%);
+    border:1px solid rgba(255,255,255,.18); border-radius:14px;
+    box-shadow:0 18px 50px rgba(0,0,0,.55);
+    opacity:0; visibility:hidden; transition:.2s;
+  }
+  .dock-btn.open .popover { opacity:1; visibility:visible; transform:translateX(-50%) translateY(0) }
+  .popover button {
+    display:flex; align-items:center; gap:9px; width:100%; text-align:left;
+    padding:9px 12px; font-size:13px; color:var(--muted); border-radius:9px; transition:.18s;
+  }
+  .popover button:hover { background:rgba(255,255,255,.07); color:#fff }
+  .popover button.active { color:#fff; background:rgba(255,255,255,.1) }
+  .popover .swatch { width:16px; height:16px; border-radius:50%; border:1px solid rgba(255,255,255,.25) }
+  .popover-title { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); padding:6px 12px 4px }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width:680px) {
+    .brand { font-size:16px }
+    .brand svg { width:24px; height:24px }
+    .back-btn span.txt { display:none }
+    .back-btn { padding:9px 11px }
+    .grid { gap:12px; padding:10px 10px 0 }
+    .card { border-radius:14px }
+    .dock { bottom:12px; border-radius:17px }
+    .dock-btn { font-size:11.5px; padding:6px 8px }
+    .dock-btn .lbl { display:none }
+    .topbar-right .icon-btn:nth-child(2) { display:none }
+  }
+</style>
+</head>
+<body>
+
+<!-- Persistent background: the last PC wallpaper viewed in detail.html.
+     Empty by default, so the body background shows through. -->
+<div class="persist-bg" id="persistBg"></div>
+
+<!-- Top bar -->
+<header class="topbar">
+  <a href="index.html" class="back-btn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+    <span class="txt">返回首页</span>
+  </a>
+  <div class="brand">
+    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.2" stroke="#f2f2f2" stroke-width="1.6"/><path d="M3.6 13.4c3-1.2 5.8-1.2 8.4 0s5.4 1.2 8.4 0" stroke="#f2f2f2" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="10.6" r="2.1" fill="#f2f2f2"/></svg>
+    <span><b>Design</b> <i>壁纸库</i></span>
+  </div>
+  <div class="topbar-right">
+    <button class="icon-btn" id="searchToggle" aria-label="搜索">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+    </button>
+    <button class="icon-btn" aria-label="收藏">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-4.5L5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- Search panel (drops below the top bar) -->
+<div class="search-panel" id="searchPanel">
+  <svg class="search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+  <input id="searchInput" type="text" placeholder="搜索标签 / 标题，如：二次元、jk制服、风景…" autocomplete="off">
+  <button id="searchClear" class="search-clear" aria-label="清除">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+  </button>
+</div>
+
+<!-- Main: paged grid + pagination -->
+<main>
+  <div class="grid" id="grid"></div>
+  <nav class="pagination" id="pagination"></nav>
+</main>
+
+<!-- Bottom filter dock -->
+<div class="dock">
+  <div class="chips" id="chips">
+    <button class="chip active" data-chip="anime">动漫</button>
+    <button class="chip" data-chip="scenery">风景</button>
+    <button class="chip" data-chip="people">人物</button>
+    <button class="chip" data-chip="simple">简约</button>
+    <button class="chip" data-chip="scifi">科幻</button>
+    <button class="dock-settings" aria-label="设置">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </div>
+  <div class="dock-row" id="dockRow">
+    <button class="dock-btn" data-dock="hot">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2s5 4.5 5 9a5 5 0 0 1-10 0c0-1.6.7-3 1.6-4C9 8.5 10 9 10.5 8 11.2 6.6 12 2 12 2z"/></svg>
+      <span class="lbl">昨日热门</span>
+    </button>
+    <button class="dock-btn" data-dock="kind">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3.5" y="3.5" width="7" height="7" rx="1.4"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.4"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.4"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.4"/></svg>
+      <span class="lbl">种类</span>
+      <div class="popover" id="pop-kind"></div>
+    </button>
+    <button class="dock-btn" data-dock="cat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      <span class="lbl">分类</span>
+      <div class="popover" id="pop-cat"></div>
+    </button>
+    <button class="dock-btn" data-dock="res">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="13" rx="1.6"/><path d="M8 20.5h8"/></svg>
+      <span class="lbl">分辨率</span>
+      <div class="popover" id="pop-res"></div>
+    </button>
+    <button class="dock-btn" data-dock="color">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-1 2-2 0-1.4-1-2-1-3s.8-2 2-2h1.5A4.5 4.5 0 0 0 21 9.5C21 5.9 16.9 3 12 3z"/><circle cx="7.5" cy="10.5" r="1.1" fill="currentColor"/><circle cx="12" cy="7.5" r="1.1" fill="currentColor"/><circle cx="16.5" cy="10.5" r="1.1" fill="currentColor"/></svg>
+      <span class="lbl">色系</span>
+      <div class="popover" id="pop-color"></div>
+    </button>
+  </div>
+</div>
+
+<script src="wallpapers-data.js"></script>
+<script>
+  /* ---------- Wallpaper data ---------- */
+  const WALLPAPERS = [
+    // —— 添加自己的图片：把图片放进 images 文件夹，再照下面这行复制一条（删掉前面的 //）——
+    // { title:'我的壁纸', category:'pc-static', tag:'scenery', src:'images/my-pic.jpg', h:400 },
+    { title:'星空银河',   category:'pc-static',    tag:'scenery', seed:'wp-pc-s-1', h:400 },
+    { title:'城市夜景',   category:'pc-static',    tag:'scenery', seed:'wp-pc-s-2', h:470 },
+    { title:'雪山日出',   category:'pc-static',    tag:'scenery', seed:'wp-pc-s-3', h:430 },
+    { title:'海洋波浪',   category:'pc-static',    tag:'scenery', seed:'wp-pc-s-4', h:500 },
+    { title:'极光流动',   category:'pc-dynamic',   tag:'scenery', seed:'wp-pc-d-1', h:420 },
+    { title:'霓虹雨夜',   category:'pc-dynamic',   tag:'scifi',   seed:'wp-pc-d-2', h:460 },
+    { title:'火焰粒子',   category:'pc-dynamic',   tag:'scifi',   seed:'wp-pc-d-3', h:390 },
+    { title:'流体渐变',   category:'pc-dynamic',   tag:'simple',  seed:'wp-pc-d-4', h:440 },
+    { title:'樱花飘落',   category:'phone-static', tag:'anime',   seed:'wp-ph-s-1', h:480 },
+    { title:'猫咪午后',   category:'phone-static', tag:'simple',  seed:'wp-ph-s-2', h:420 },
+    { title:'极简几何',   category:'phone-static', tag:'simple',  seed:'wp-ph-s-3', h:450 },
+    { title:'森林小径',   category:'phone-static', tag:'scenery', seed:'wp-ph-s-4', h:400 },
+    { title:'时钟动态',   category:'phone-dynamic',tag:'simple',  seed:'wp-ph-d-1', h:470 },
+    { title:'雨滴屏幕',   category:'phone-dynamic',tag:'simple',  seed:'wp-ph-d-2', h:430 },
+    { title:'粒子星轨',   category:'phone-dynamic',tag:'scifi',   seed:'wp-ph-d-3', h:490 },
+    { title:'波浪律动',   category:'phone-dynamic',tag:'simple',  seed:'wp-ph-d-4', h:410 },
+    { title:'赛博朋克',   category:'dynamic-bg',   tag:'scifi',   seed:'wp-bg-1',   h:440 },
+    { title:'抽象流体',   category:'dynamic-bg',   tag:'simple',  seed:'wp-bg-2',   h:400 },
+    { title:'宇宙星云',   category:'dynamic-bg',   tag:'scenery', seed:'wp-bg-3',   h:460 },
+    { title:'金属质感',   category:'dynamic-bg',   tag:'simple',  seed:'wp-bg-4',   h:420 },
+    { title:'复古胶片',   category:'other',        tag:'people',  seed:'wp-ot-1',   h:450 },
+    { title:'手绘插画',   category:'other',        tag:'anime',   seed:'wp-ot-2',   h:410 },
+    { title:'3D 渲染',    category:'other',        tag:'scifi',   seed:'wp-ot-3',   h:480 },
+    { title:'摄影作品',   category:'other',        tag:'people',  seed:'wp-ot-4',   h:430 }
+  ];
+
+  const CAT_LABELS = {
+    'pc-static':'电脑壁纸 · 静态壁纸',
+    'pc-dynamic':'电脑壁纸 · 动态壁纸',
+    'phone-static':'手机壁纸 · 静态壁纸',
+    'phone-dynamic':'手机壁纸 · 动态壁纸',
+    'dynamic-bg':'动态背景',
+    'other':'关于其他'
+  };
+
+  /* deterministic pseudo stats */
+  function statFor(i, salt) {
+    const x = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
+    return Math.floor((x - Math.floor(x)) * 48000) + 120;
+  }
+
+  const grid = document.getElementById('grid');
+  // 优先使用“更新壁纸.bat”自动生成的清单；为空时回退到内置占位图
+  const DATA = (window.WALLPAPER_MANIFEST && window.WALLPAPER_MANIFEST.length)
+    ? window.WALLPAPER_MANIFEST : WALLPAPERS;
+  let activeFilter = 'pc-dynamic';   // category filter（初始：电脑壁纸·动态）
+  let activeTag = 'anime';      // chip tag filter（初始：动漫）
+  const PAGE_SIZE = 16;
+  let currentPage = 1;
+  let searchQuery = '';
+
+  function currentList() {
+    const q = searchQuery.trim().toLowerCase();
+    return DATA.filter(w =>
+      (!activeFilter || w.category === activeFilter) &&
+      (!activeTag || w.tag === activeTag) &&
+      (!q ||
+        (w.tags || []).some(t => t.toLowerCase().includes(q)) ||
+        (w.title || '').toLowerCase().includes(q)));
+  }
+
+  const TAG_LABEL = { anime:'动漫', scenery:'风景', people:'人物', simple:'精选', scifi:'科幻' };
+  const CAT_LABEL = {
+    'pc-static':'电脑 · 静态', 'pc-dynamic':'电脑 · 动态',
+    'phone-static':'手机 · 静态', 'phone-dynamic':'手机 · 动态',
+    'dynamic-bg':'动态背景', 'other':'其他'
+  };
+
+  /* ---------- 3D tilt (vanilla-tilt style, ref: haowallpaper.com) ---------- */
+  const TILT = { max:13, perspective:1000, speed:400, easing:'cubic-bezier(.03,.98,.52,.99)' };
+
+  function bindTilt(card) {
+    const { max, perspective, speed, easing } = TILT;
+
+    function apply(rx, ry, animate) {
+      card.style.transition = animate ? `transform ${speed}ms ${easing}` : 'none';
+      card.style.transform =
+        `perspective(${perspective}px) rotateX(${rx}deg) rotateY(${ry}deg)`;
+    }
+    function anglesFromPoint(clientX, clientY) {
+      const r = card.getBoundingClientRect();
+      const px = (clientX - r.left) / r.width;    // 0 (left) – 1 (right)
+      const py = (clientY - r.top) / r.height;   // 0 (top)  – 1 (bottom)
+      const ry = (0.5 - px) * 2 * max;           // rotateY: left +max, right -max
+      const rx = (py - 0.5) * 2 * max;           // rotateX: top -max, bottom +max
+      return { rx, ry };
+    }
+
+    card.addEventListener('mouseenter', (e) => {
+      const { rx, ry } = anglesFromPoint(e.clientX, e.clientY);
+      apply(rx, ry, true);
+    });
+    card.addEventListener('mousemove', (e) => {
+      const { rx, ry } = anglesFromPoint(e.clientX, e.clientY);
+      apply(rx, ry, false);
+    });
+    card.addEventListener('mouseleave', () => {
+      apply(0, 0, true);
+      // clear inline styles after the reset so later hover states stay clean
+      setTimeout(() => {
+        card.style.transition = '';
+        card.style.transform = '';
+      }, speed + 30);
+    });
+  }
+
+  /* ---------- media: image or mp4 video ---------- */
+  function isVideoItem(w) {
+    if (w.type === 'video') return true;
+    const s = w.src || w.original || '';
+    return /\.(mp4|webm|ogv|mov|m4v)(\?|$)/i.test(s);
+  }
+
+  function mediaInnerHTML(w) {
+    const isPhone = (w.category || '').indexOf('phone') === 0;
+    const ratio = (w.w && w.h) ? ('aspect-ratio:' + w.w + '/' + w.h + ';') : '';
+    const phoneStyle = isPhone ? (' style="height:auto;' + ratio + '"') : '';
+    if (isVideoItem(w)) {
+      const src = w.src || w.original;
+      const poster = w.poster ? ' poster="' + w.poster + '"' : '';
+      return '<video class="card-media"' + phoneStyle + ' src="' + src + '"' + poster +
+        ' muted loop autoplay playsinline webkit-playsinline preload="auto"' +
+        ' disablepictureinpicture controlslist="nodownload noremoteplayback"></video>';
+    }
+    const src = w.src || ('https://picsum.photos/seed/' + w.seed + '/600/' + w.h);
+    return '<img class="card-media"' + phoneStyle + ' src="' + src + '" alt="' + w.title + '" loading="lazy">';
+  }
+
+  /* ---------- Persistent background: last viewed PC wallpaper ----------
+     detail.html stores its id in sessionStorage; after returning we show it
+     full-screen (a static frame for videos, same as the detail page) until
+     another PC wallpaper is viewed and overwrites the value. */
+  function applyPersistedBg() {
+    const host = document.getElementById('persistBg');
+    let id;
+    try { id = parseInt(sessionStorage.getItem('lastPcWallpaper'), 10); } catch (e) { return; }
+    if (!isFinite(id)) { host.innerHTML = ''; return; }
+    const w = DATA[id];
+    if (!w || (w.category !== 'pc-static' && w.category !== 'pc-dynamic')) {
+      try { sessionStorage.removeItem('lastPcWallpaper'); } catch (e) {}
+      host.innerHTML = '';
+      return;
+    }
+    const src = w.original || w.src;
+    if (isVideoItem(w)) {
+      host.innerHTML = '<video muted playsinline webkit-playsinline preload="auto"' +
+        ' disablepictureinpicture src="' + src + '"></video>';
+      const v = host.querySelector('video');
+      // seek to a representative mid-shot to avoid a black first frame
+      const pickFrame = () => {
+        const t = isFinite(v.duration) ? Math.min(v.duration * 0.5, 6) : 3;
+        try { v.currentTime = t; } catch (e) {}
+      };
+      v.addEventListener('loadeddata', pickFrame, { once:true });
+    } else {
+      host.innerHTML = '<img src="' + src + '" alt="">';
+    }
+  }
+  // bfcache restore (back button) does not rerun scripts; reapply then
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) {
+      applyPersistedBg();
+      // bfcache already restored the previous view; drop the saved snapshot
+      try { sessionStorage.removeItem('wallpaperState'); } catch (err) {}
+    }
+  });
+
+  /* ---------- Save / restore the library view around detail.html ----------
+     Bfcache is not guaranteed (and disabled while DevTools/CDP is attached),
+     so before jumping to a detail page we snapshot the current filters,
+     pagination, scroll position and search query; on return we restore them,
+     making the back button land on the exact previous screen. */
+  let pendingScroll = 0;
+  grid.addEventListener('click', (e) => {
+    if (!e.target.closest('.card-go')) return;
+    try {
+      sessionStorage.setItem('wallpaperState', JSON.stringify({
+        filter: activeFilter, tag: activeTag, page: currentPage,
+        scroll: Math.round(window.scrollY), q: searchQuery
+      }));
+    } catch (err) {}
+  });
+
+  function restoreWallpaperState() {
+    let s = null;
+    try { s = JSON.parse(sessionStorage.getItem('wallpaperState') || 'null'); } catch (err) {}
+    if (!s) return;
+    activeFilter = s.filter || activeFilter;
+    activeTag = s.tag || activeTag;
+    currentPage = s.page || 1;
+    searchQuery = s.q || '';
+    pendingScroll = s.scroll || 0;
+    // sync tag chips
+    document.querySelectorAll('.chip').forEach(c =>
+      c.classList.toggle('active', c.dataset.chip === activeTag));
+    // sync search box / panel
+    const si = document.getElementById('searchInput');
+    si.value = searchQuery;
+    if (searchQuery) document.getElementById('searchPanel').classList.add('open');
+    // one-shot: only the immediate return should restore this snapshot
+    sessionStorage.removeItem('wallpaperState');
+  }
+
+  function renderCards() {
+    const isPhoneView = (activeFilter || '').indexOf('phone') === 0;
+    grid.classList.toggle('phone-mode', isPhoneView);
+    document.getElementById('pagination').classList.toggle('phone-rail', isPhoneView);
+    grid.innerHTML = '';
+    const list = currentList();
+    const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
+    if (list.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = '该筛选条件下暂无壁纸';
+      grid.appendChild(empty);
+      renderPagination(0);
+      return;
+    }
+    const start = (currentPage - 1) * PAGE_SIZE;
+    list.slice(start, start + PAGE_SIZE).forEach((w) => {
+      const idx = DATA.indexOf(w);
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML =
+        mediaInnerHTML(w) +
+        '<div class="card-overlay">' +
+          '<div class="card-tags">' +
+            (w.tags || [w.category, w.tag]).map(t => '<span class="tag-pill">' + t + '</span>').join('') +
+          '</div>' +
+          '<a class="card-go" href="detail.html?id=' + idx + '">前往<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>' +
+        '</div>';
+      grid.appendChild(card);
+      bindTilt(card);
+      const media = card.querySelector('.card-media');
+      // hide the whole card if the media fails to load (file deleted but manifest stale)
+      media.addEventListener('error', () => { card.style.display = 'none'; });
+      if (isVideoItem(w)) {
+        // muted autoplay (autoplay requires muted); call play() as a fallback
+        media.muted = true;
+        const p = media.play();
+        if (p && p.catch) p.catch(() => {});
+        // phone masonry: once metadata is known, reserve space at the real ratio
+        if ((w.category || '').indexOf('phone') === 0) {
+          media.addEventListener('loadedmetadata', () => {
+            if (media.videoWidth) media.style.aspectRatio = media.videoWidth + '/' + media.videoHeight;
+          });
+        }
+      }
+      // "前往" 现在通过 <a href="detail.html?id=…"> 直接跳转到详情页
+    });
+    renderPagination(totalPages);
+  }
+
+  /* ---------- Pagination ---------- */
+  const paginationEl = document.getElementById('pagination');
+  const ARROW_SVG = {
+    prev:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+    next:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>'
+  };
+
+  function pageNumbers(current, total) {
+    if (total <= 7) return Array.from({length: total}, (_, i) => i + 1);
+    const pages = [1];
+    if (current <= 4) pages.push(2, 3, 4, 5, '...', total);
+    else if (current >= total - 3) pages.push('...', total - 4, total - 3, total - 2, total - 1, total);
+    else pages.push('...', current - 1, current, current + 1, '...', total);
+    return pages;
+  }
+
+  function renderPagination(totalPages) {
+    paginationEl.innerHTML = '';
+    if (totalPages <= 0) { paginationEl.style.display = 'none'; return; }
+    paginationEl.style.display = 'flex';
+
+    const mk = (cls, html, page) => {
+      const b = document.createElement('button');
+      b.className = 'page-btn ' + cls;
+      b.innerHTML = html;
+      if (page != null) b.dataset.page = page;
+      return b;
+    };
+
+    const prev = mk('arrow', ARROW_SVG.prev, currentPage - 1);
+    prev.disabled = currentPage <= 1;
+    paginationEl.appendChild(prev);
+
+    pageNumbers(currentPage, totalPages).forEach(p => {
+      if (p === '...') {
+        const s = document.createElement('span');
+        s.className = 'page-ellipsis'; s.textContent = '...';
+        paginationEl.appendChild(s);
+      } else {
+        paginationEl.appendChild(mk(p === currentPage ? 'active' : '', p, p));
+      }
+    });
+
+    paginationEl.appendChild(mk('go', 'Go', null));
+
+    const next = mk('arrow', ARROW_SVG.next, currentPage + 1);
+    next.disabled = currentPage >= totalPages;
+    paginationEl.appendChild(next);
+  }
+
+  function gotoPage(p) {
+    const totalPages = Math.max(1, Math.ceil(currentList().length / PAGE_SIZE));
+    p = Math.min(Math.max(1, Math.round(p)), totalPages);
+    if (p === currentPage) return;
+    currentPage = p;
+    renderCards();
+    const gridEl = document.getElementById('grid');
+    const y = gridEl.getBoundingClientRect().top + window.scrollY - 76 - 14;
+    window.scrollTo({ top: y, behavior: 'smooth' });
+  }
+
+  paginationEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('.page-btn');
+    if (!btn || btn.disabled) return;
+    if (btn.classList.contains('go')) {
+      const input = window.prompt('跳转到第几页？', String(currentPage));
+      if (input != null && input.trim() !== '') {
+        const p = parseInt(input, 10);
+        if (!isNaN(p)) gotoPage(p);
+      }
+      return;
+    }
+    if (btn.dataset.page) gotoPage(parseInt(btn.dataset.page, 10));
+  });
+
+  /* ---------- Sync active states ---------- */
+  function setViewActive() {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.view-menu button').forEach(b => b.classList.remove('active'));
+    if (!activeFilter) return;
+    const map = {
+      'pc-static':['pc',1], 'pc-dynamic':['pc',0],
+      'phone-static':['phone',1], 'phone-dynamic':['phone',0],
+      'dynamic-bg':['dynamic-bg',null], 'other':['other',null]
+    };
+    const m = map[activeFilter];
+    if (!m) return;
+    const view = document.querySelector('.view[data-view="' + m[0] + '"]');
+    if (!view) return;
+    view.classList.add('active');
+    if (m[1] !== null) {
+      const btns = view.querySelectorAll('.view-menu button');
+      if (btns[m[1]]) btns[m[1]].classList.add('active');
+    }
+  }
+
+  function applyCategory(filter) {
+    activeFilter = filter;   // 纯选中：重复点击同一种类保持选中，不再取消跳到全部
+    currentPage = 1;
+    setViewActive();
+    renderCards();
+  }
+
+  /* ---------- Search ---------- */
+  const searchPanel = document.getElementById('searchPanel');
+  const searchInput = document.getElementById('searchInput');
+
+  document.getElementById('searchToggle').addEventListener('click', () => {
+    const open = searchPanel.classList.toggle('open');
+    if (open) searchInput.focus();
+  });
+  searchInput.addEventListener('input', () => {
+    searchQuery = searchInput.value;
+    currentPage = 1;
+    renderCards();
+  });
+  document.getElementById('searchClear').addEventListener('click', () => {
+    searchInput.value = ''; searchQuery = ''; currentPage = 1;
+    renderCards();
+    searchPanel.classList.remove('open'); searchInput.blur();
+  });
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === 'Escape') {
+      searchPanel.classList.remove('open'); searchInput.blur();
+    }
+  });
+
+  /* ---------- Chips ---------- */
+  document.getElementById('chips').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    activeTag = chip.dataset.chip;
+    chip.classList.add('active');
+    currentPage = 1;
+    renderCards();
+  });
+
+  /* ---------- Dock popovers ---------- */
+  const POPOVERS = {
+    kind: [
+      { items:[
+        { label:'电脑壁纸 · 动态', filter:'pc-dynamic' },
+        { label:'电脑壁纸 · 静态', filter:'pc-static' },
+        { label:'手机壁纸 · 动态', filter:'phone-dynamic' },
+        { label:'手机壁纸 · 静态', filter:'phone-static' },
+        { label:'动态背景', filter:'dynamic-bg' } ] }
+    ],
+    cat: [
+      { items:[
+        { label:'动漫', tag:'anime' },
+        { label:'风景', tag:'scenery' },
+        { label:'人物', tag:'people' },
+        { label:'简约', tag:'simple' },
+        { label:'科幻', tag:'scifi' } ] }
+    ],
+    res: [
+      { title:'分辨率', items:[
+        { label:'4K · 3840×2160' }, { label:'2K · 2560×1440' },
+        { label:'1080P · 1920×1080' }, { label:'手机 · 1080×1920' } ] }
+    ],
+    color: [
+      { title:'色系', swatches:[
+        { c:'#ef4444' }, { c:'f59e0b'.replace(/^/,'#') }, { c:'#eab308' }, { c:'#22c55e' },
+        { c:'#06b6d4' }, { c:'#3b82f6' }, { c:'#8b5cf6' }, { c:'#ec4899' },
+        { c:'#ffffff' }, { c:'#1f2937' } ] }
+    ]
+  };
+
+  function buildPopover(name) {
+    const host = document.getElementById('pop-' + name);
+    if (name === 'color') {
+      const block = POPOVERS.color[0];
+      host.innerHTML = '<div class="popover-title">' + block.title + '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:6px 10px 10px">' +
+        block.swatches.map(s => '<button class="color-dot" data-c="' + s.c + '" style="padding:3px;justify-content:center"><span class="swatch" style="background:' + s.c + '"></span></button>').join('') +
+        '</div>';
+      return;
+    }
+    host.innerHTML = POPOVERS[name].map(block =>
+      (block.title ? '<div class="popover-title">' + block.title + '</div>' : '') +
+      block.items.map(it =>
+        '<button data-filter="' + (it.filter || '') + '" data-tag="' + (it.tag || '') + '">' +
+        '<span>' + it.label + '</span></button>').join('')
+    ).join('');
+  }
+  ['kind','cat','res','color'].forEach(buildPopover);
+
+  document.getElementById('dockRow').addEventListener('click', (e) => {
+    const dockBtn = e.target.closest('.dock-btn');
+    const popItem = e.target.closest('.popover button');
+    if (popItem) {
+      e.stopPropagation();
+      if (popItem.dataset.filter) applyCategory(popItem.dataset.filter);
+      if (popItem.dataset.tag) {
+        activeTag = popItem.dataset.tag;
+        document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+        const c = document.querySelector('.chip[data-chip="' + activeTag + '"]');
+        if (c) c.classList.add('active');
+        currentPage = 1;
+        renderCards();
+      }
+      // resolution / color: visual selection only
+      popItem.closest('.popover').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      popItem.classList.add('active');
+      return;
+    }
+    if (dockBtn) {
+      const wasOpen = dockBtn.classList.contains('open');
+      document.querySelectorAll('.dock-btn').forEach(b => b.classList.remove('open'));
+      if (dockBtn.dataset.dock === 'hot') {
+        // 昨日热门: 回到默认视图（电脑壁纸·动态 + 动漫）
+        activeFilter = 'pc-dynamic'; activeTag = 'anime'; currentPage = 1;
+        document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+        document.querySelector('.chip[data-chip="anime"]').classList.add('active');
+        setViewActive(); renderCards();
+        return;
+      }
+      // 分辨率 / 色系: plain buttons, do nothing
+      if (dockBtn.dataset.dock === 'res' || dockBtn.dataset.dock === 'color') return;
+      if (!wasOpen) dockBtn.classList.add('open');
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.dock-btn')) {
+      document.querySelectorAll('.dock-btn').forEach(b => b.classList.remove('open'));
+    }
+  });
+
+  /* init */
+  applyPersistedBg();
+  restoreWallpaperState();
+  setViewActive();
+  renderCards();
+  if (pendingScroll) {
+    // restore the previous scroll position once the rebuilt grid is laid out
+    requestAnimationFrame(() => requestAnimationFrame(() =>
+      window.scrollTo(0, pendingScroll)));
+  }
+</script>
+</body>
+</html>
