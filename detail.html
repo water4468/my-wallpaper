@@ -143,6 +143,30 @@
   }
   .window .inner img, .window .inner video { width:100%; height:100%; object-fit:cover; display:block }
 
+  /* Inner clipping wrapper: forces the media onto a composited layer that is
+     correctly cropped by the device frame on Android vendor browsers (where
+     a hardware video otherwise renders as a separate surface and overflows
+     the rounded screen). */
+  .media-clip {
+    position:absolute; inset:0; overflow:hidden;
+    border-radius:inherit;
+    -webkit-transform:translateZ(0); transform:translateZ(0);
+    backface-visibility:hidden; -webkit-backface-visibility:hidden;
+    z-index:1;
+  }
+  .media-clip img, .media-clip video {
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    object-fit:cover; display:block;
+    -webkit-transform:translateZ(0); transform:translateZ(0);
+  }
+  /* Transparent guard over the media so the user can't tap the bare video and
+     trigger the OS fullscreen player; playback is controlled by our overlay. */
+  .media-guard {
+    position:absolute; inset:0; z-index:2;
+    background:transparent; border:none; padding:0;
+  }
+
   /* overlay shown when the browser blocks autoplay of the video WITH sound;
      one tap plays it (a trusted gesture always allows audible playback) */
   .video-sound-play {
@@ -236,6 +260,53 @@
     .brand span i { display:none }
     .meta-grid { grid-template-columns:1fr }
   }
+
+  /* ---------- Download progress overlay ---------- */
+  .dl-overlay {
+    position:fixed; inset:0; z-index:1000;
+    display:none; align-items:center; justify-content:center;
+    background:rgba(8,8,10,.55); padding:24px;
+    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+  }
+  .dl-overlay.show { display:flex }
+  .dl-box {
+    width:100%; max-width:340px; text-align:center;
+    background:rgba(28,28,33,.72);
+    border:1px solid rgba(255,255,255,.14); border-radius:24px;
+    padding:30px 26px 24px;
+    -webkit-backdrop-filter:blur(26px) saturate(150%); backdrop-filter:blur(26px) saturate(150%);
+    box-shadow:0 30px 80px rgba(0,0,0,.55);
+  }
+  .dl-ring { position:relative; width:150px; height:150px; margin:0 auto 18px }
+  .dl-ring svg { width:100%; height:100%; transform:rotate(-90deg) }
+  .dl-ring .ring-bg { fill:none; stroke:rgba(255,255,255,.12); stroke-width:9 }
+  .dl-ring .ring-fg {
+    fill:none; stroke:#7ce6a8; stroke-width:9; stroke-linecap:round;
+    stroke-dasharray:326.73; stroke-dashoffset:326.73;
+    transition:stroke-dashoffset .2s linear, stroke .25s;
+  }
+  .dl-pct {
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:2px;
+  }
+  .dl-pct b { font-size:30px; font-weight:700; line-height:1 }
+  .dl-pct span { font-size:11.5px; color:var(--muted) }
+  .dl-name { font-size:14px; font-weight:600; margin-bottom:5px; word-break:break-all }
+  .dl-amount { font-size:12px; color:var(--muted); margin-bottom:16px }
+  .dl-tip { font-size:12.5px; color:var(--muted); line-height:1.75; margin:2px 0 16px }
+  .dl-tip b { color:#fff; font-weight:600 }
+  .dl-fallback {
+    display:inline-block; font-size:12.5px; color:#fff;
+    border:1px solid rgba(255,255,255,.26); border-radius:999px;
+    padding:9px 18px; margin-bottom:12px;
+  }
+  .dl-fallback:hover { background:rgba(255,255,255,.1) }
+  .dl-close {
+    font-size:12.5px; color:var(--muted);
+    border:1px solid rgba(255,255,255,.16); border-radius:999px;
+    padding:8px 18px;
+  }
+  .dl-close:hover { color:#fff; border-color:#fff }
 </style>
 </head>
 <body>
@@ -257,6 +328,24 @@
 </header>
 
 <main class="detail-main" id="detailMain"></main>
+
+<!-- Download progress overlay -->
+<div class="dl-overlay" id="dlOverlay">
+  <div class="dl-box">
+    <div class="dl-ring">
+      <svg viewBox="0 0 120 120">
+        <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+        <circle class="ring-fg" id="ringFg" cx="60" cy="60" r="52"></circle>
+      </svg>
+      <div class="dl-pct"><b id="dlPctNum">0%</b><span id="dlPctSub">下载进度</span></div>
+    </div>
+    <div class="dl-name" id="dlName"></div>
+    <div class="dl-amount" id="dlAmount"></div>
+    <div class="dl-tip" id="dlTip" style="display:none"></div>
+    <a class="dl-fallback" id="dlFallback" style="display:none" download></a>
+    <div><button class="dl-close" id="dlClose" type="button">关闭</button></div>
+  </div>
+</div>
 
 <script src="wallpapers-data.js"></script>
 <script>
@@ -281,9 +370,21 @@
   function deviceHTML(w) {
     const src = esc(mediaSrc(w));
     const cat = w.category || '';
-    const media = isVideo(w)
-      ? '<video src="' + src + '" loop autoplay playsinline webkit-playsinline preload="auto" disablepictureinpicture></video>'
-      : '<img src="' + src + '" alt="' + esc(w.title) + '">';
+    let media;
+    if (isVideo(w)) {
+      // Starts muted so inline autoplay is always allowed; JS then unmutes it
+      // (and shows a tap-to-play overlay if the browser blocks audible start).
+      media =
+        '<div class="media-clip">' +
+          '<video src="' + src + '" loop autoplay muted playsinline webkit-playsinline ' +
+          'x5-playsinline x5-video-player-type="h5" x5-video-player-fullscreen="false" ' +
+          'x5-video-orientation="portrait" preload="auto" disablepictureinpicture ' +
+          'controlslist="nodownload nofullscreen noremoteplayback"></video>' +
+          '<div class="media-guard" aria-hidden="true"></div>' +
+        '</div>';
+    } else {
+      media = '<div class="media-clip"><img src="' + src + '" alt="' + esc(w.title) + '"></div>';
+    }
 
     if (cat.indexOf('phone') === 0) {
       return '<div class="phone"><div class="frame"><div class="island"></div>' + media + '</div></div>';
@@ -391,6 +492,12 @@
       host.appendChild(b);
     };
     mockVideos.forEach(v => {
+      // Belt-and-suspenders: block taps on the bare video and any attempt to
+      // open the OS fullscreen player (the .media-guard already covers taps).
+      v.addEventListener('click', ev => ev.preventDefault());
+      v.addEventListener('webkitbeginfullscreen', () => {
+        try { if (v.webkitExitFullscreen) v.webkitExitFullscreen(); else if (v.webkitExitFullScreen) v.webkitExitFullScreen(); } catch (e) {}
+      });
       v.muted = false;
       const p = v.play();
       if (p && p.catch) p.catch(() => showSoundOverlay(v));
@@ -434,46 +541,135 @@
     }
   });
 
-  /* ---------- Reliable file download (desktop + modern mobile) ----------
-     The plain download attribute is ignored by some mobile browsers and by
-     cross-origin setups (the file just opens in a tab). Fetch the file as a
-     Blob and force an object-URL download instead; on failure (e.g. the
-     page was opened via file://), fall back to opening the direct link. */
-  function triggerBlobDownload(blob, filename) {
+  /* ---------- Download with real progress (desktop + mobile) ----------
+     Streams the file so the ring shows true percentage, then saves a Blob.
+     Mobile browsers that will not persist a Blob, and WeChat (which blocks
+     it), get an explicit direct-save / open-in-browser fallback. */
+  const dlOverlay = document.getElementById('dlOverlay');
+  const ringFg = document.getElementById('ringFg');
+  const dlPctNum = document.getElementById('dlPctNum');
+  const dlPctSub = document.getElementById('dlPctSub');
+  const dlName = document.getElementById('dlName');
+  const dlAmount = document.getElementById('dlAmount');
+  const dlTip = document.getElementById('dlTip');
+  const dlFallback = document.getElementById('dlFallback');
+  const dlClose = document.getElementById('dlClose');
+  const RING_C = 2 * Math.PI * 52;
+
+  const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isAndroid = /Android/i.test(navigator.userAgent);
+
+  function formatBytes(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n/1024).toFixed(1) + ' KB';
+    return (n/1048576).toFixed(2) + ' MB';
+  }
+  function resetDl() {
+    ringFg.style.stroke = '#7ce6a8';
+    ringFg.style.strokeDashoffset = RING_C;
+    dlPctNum.textContent = '0%';
+    dlPctSub.textContent = '下载进度';
+    dlAmount.textContent = '';
+    dlTip.style.display = 'none'; dlTip.innerHTML = '';
+    dlFallback.style.display = 'none';
+    dlClose.style.display = '';
+  }
+  function openDl() { resetDl(); dlOverlay.classList.add('show'); }
+  function closeDl() { dlOverlay.classList.remove('show'); }
+
+  function setDlProgress(received, total) {
+    if (total > 0) {
+      const pct = Math.min(100, Math.floor(received/total*100));
+      ringFg.style.strokeDashoffset = (RING_C * (1 - pct/100)).toFixed(1);
+      dlPctNum.textContent = pct + '%';
+      dlAmount.textContent = formatBytes(received) + ' / ' + formatBytes(total);
+    } else {
+      ringFg.style.strokeDashoffset = (RING_C*0.25).toFixed(1);
+      dlPctNum.textContent = '…';
+      dlAmount.textContent = '已下载 ' + formatBytes(received);
+    }
+  }
+  function saveBlob(blob, filename) {
     const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = objectUrl; a.download = filename; a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+  }
+  function showFallback(url, filename) {
+    dlFallback.href = url; dlFallback.download = filename;
+    dlFallback.textContent = isIOS
+      ? '点此打开，再长按选择“存储/保存”'
+      : '点此直接保存（或长按保存）';
+    dlFallback.style.display = 'inline-block';
   }
 
-  async function downloadWallpaper(btn) {
-    const url = btn.href;
-    let filename = btn.getAttribute('download') || '';
-    if (!filename) {
-      try { filename = decodeURIComponent(url.split('/').pop().split('?')[0]); }
-      catch (e) { filename = 'wallpaper'; }
-    }
-    const label = btn.querySelector('.dl-label');
-    const original = label ? label.textContent : '';
-    if (label) label.textContent = '准备下载…';
+  async function downloadWithProgress(url, filename) {
+    openDl();
+    dlName.textContent = filename;
+    let resp;
     try {
-      const resp = await fetch(url);
+      resp = await fetch(url, { cache: 'no-store' });
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      const blob = await resp.blob();
-      triggerBlobDownload(blob, filename);
-      if (label) label.textContent = '下载已开始';
     } catch (err) {
-      const a = document.createElement('a');
-      a.href = url; a.download = filename; a.target = '_blank';
-      a.rel = 'noopener';
-      document.body.appendChild(a); a.click(); a.remove();
-    } finally {
-      setTimeout(() => { if (label) label.textContent = original; }, 2000);
+      ringFg.style.stroke = '#ff7a7a';
+      dlPctNum.textContent = '!'; dlPctSub.textContent = '下载失败';
+      dlTip.style.display = 'block';
+      dlTip.innerHTML = '网络请求失败，请点下面按钮直接保存。';
+      showFallback(url, filename);
+      return;
+    }
+    const total = parseInt(resp.headers.get('content-length') || '0', 10);
+    const contentType = resp.headers.get('content-type') || '';
+    let blob;
+    try {
+      if (resp.body && resp.body.getReader) {
+        const reader = resp.body.getReader();
+        const chunks = []; let received = 0;
+        for (;;) {
+          const rr = await reader.read();
+          if (rr.done) break;
+          chunks.push(rr.value); received += rr.value.length;
+          setDlProgress(received, total);
+        }
+        blob = new Blob(chunks, { type: contentType });
+      } else {
+        blob = await resp.blob();
+        setDlProgress(blob.size, blob.size);
+      }
+    } catch (err) {
+      ringFg.style.stroke = '#ff7a7a';
+      dlPctNum.textContent = '!'; dlPctSub.textContent = '下载中断';
+      showFallback(url, filename);
+      return;
+    }
+    ringFg.style.strokeDashoffset = '0';
+    dlPctNum.textContent = '100%';
+    dlPctSub.textContent = '正在保存…';
+    dlAmount.textContent = '共 ' + formatBytes(blob.size);
+    try {
+      saveBlob(blob, filename);
+      dlPctSub.textContent = '已保存到设备';
+      if (isIOS || isAndroid) showFallback(url, filename);
+    } catch (e) {
+      dlPctSub.textContent = '请手动保存';
+      showFallback(url, filename);
     }
   }
+
+  function showWeChatTip(url, filename) {
+    openDl();
+    dlName.textContent = filename;
+    ringFg.style.strokeDashoffset = RING_C;
+    dlPctNum.textContent = '···'; dlPctSub.textContent = '请在浏览器中打开';
+    dlTip.style.display = 'block';
+    dlTip.innerHTML = '微信内无法直接下载。<br>请点右上角 <b>···</b>，选择<b>“在浏览器打开”</b>' +
+      (isIOS ? '（iPhone 选“在 Safari 中打开”）' : '') + '，再点下载。';
+  }
+
+  dlClose.addEventListener('click', closeDl);
+  dlOverlay.addEventListener('click', (e) => { if (e.target === dlOverlay) closeDl(); });
 
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('.btn-download');
@@ -481,8 +677,15 @@
     e.preventDefault();
     if (btn.dataset.busy === '1') return;
     btn.dataset.busy = '1';
-    downloadWallpaper(btn).finally(() =>
-      setTimeout(() => { btn.dataset.busy = ''; }, 1500));
+    const url = btn.href;
+    let filename = btn.getAttribute('download') || '';
+    if (!filename) {
+      try { filename = decodeURIComponent(url.split('/').pop().split('?')[0]); }
+      catch (e2) { filename = 'wallpaper'; }
+    }
+    if (isWeChat) showWeChatTip(url, filename);
+    else downloadWithProgress(url, filename);
+    setTimeout(() => { btn.dataset.busy = ''; }, 1500);
   });
 
   render();
