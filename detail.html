@@ -143,6 +143,17 @@
   }
   .window .inner img, .window .inner video { width:100%; height:100%; object-fit:cover; display:block }
 
+  /* overlay shown when the browser blocks autoplay of the video WITH sound;
+     one tap plays it (a trusted gesture always allows audible playback) */
+  .video-sound-play {
+    position:absolute; inset:0; z-index:5; border:none; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+    color:#fff; background:rgba(10,10,12,0.42);
+    backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px);
+    font-size:13px; font-weight:600; letter-spacing:.02em;
+  }
+  .video-sound-play svg { width:46px; height:46px; filter:drop-shadow(0 4px 14px rgba(0,0,0,.4)); }
+
   /* Entrance: all content is visible by default. A lightweight fade is applied
      via JS only when it is safe (no large video blocking the renderer); if it
      ever fails, the default visible state keeps everything on screen. */
@@ -271,7 +282,7 @@
     const src = esc(mediaSrc(w));
     const cat = w.category || '';
     const media = isVideo(w)
-      ? '<video src="' + src + '" muted loop autoplay playsinline webkit-playsinline preload="auto" disablepictureinpicture></video>'
+      ? '<video src="' + src + '" loop autoplay playsinline webkit-playsinline preload="auto" disablepictureinpicture></video>'
       : '<img src="' + src + '" alt="' + esc(w.title) + '">';
 
     if (cat.indexOf('phone') === 0) {
@@ -365,8 +376,24 @@
     });
 
     const mockVideos = main.querySelectorAll('video');
+    /* The device video now plays WITH sound. Audible autoplay is only allowed
+       after real interaction, so on failure show a one-tap play overlay. */
+    const showSoundOverlay = (v) => {
+      const host = v.closest('.screen') || v.closest('.frame') || v.closest('.inner') || v.parentElement;
+      if (!host || host.querySelector('.video-sound-play')) return;
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'video-sound-play';
+      b.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg><span>点击播放（含声音）</span>';
+      b.addEventListener('click', () => {
+        v.muted = false; v.volume = 1;
+        v.play().then(() => b.remove()).catch(() => {});
+      });
+      host.appendChild(b);
+    };
     mockVideos.forEach(v => {
-      const p = v.play(); if (p && p.catch) p.catch(()=>{});
+      v.muted = false;
+      const p = v.play();
+      if (p && p.catch) p.catch(() => showSoundOverlay(v));
     });
 
     let revealed = false;

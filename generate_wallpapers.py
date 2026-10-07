@@ -27,15 +27,29 @@ VIDEO_EXTS = (".mp4", ".webm", ".ogv", ".ogg", ".mov", ".m4v")
 THUMB_W = 640          # 缩略图宽度（足以在高分屏卡片上清晰显示）
 JPEG_Q = 86            # 缩略图质量
 
+# 文件名末尾用于手动排序的“-数字”，例如 “OS娘-Q版-卡通-可爱-3.mp4”
+TRAILING_NUM = re.compile(r'[-_](\d+)\s*$')
+
+def strip_trailing_num(stem):
+    """去掉文件名末尾仅用于排序的“-数字”，避免它进入标题/标签。"""
+    return TRAILING_NUM.sub('', stem).strip('-_ ')
+
+def order_key(name):
+    """按文件名末尾数字从小到大；没有数字的排在后面，再按名字兜底。"""
+    m = TRAILING_NUM.search(os.path.splitext(name)[0])
+    if m:
+        return (0, int(m.group(1)), name)
+    return (1, 0, name)
+
 def title_from_name(name):
-    stem = os.path.splitext(name)[0]
+    stem = strip_trailing_num(os.path.splitext(name)[0])
     for ch in ("_", "-"):
         stem = stem.replace(ch, " ")
     return stem.strip()
 
 def tags_from_name(name):
     """从文件名按分隔符（- _）提取标签数组，去空、去重、去除首尾空格"""
-    stem = os.path.splitext(name)[0]
+    stem = strip_trailing_num(os.path.splitext(name)[0])
     parts = re.split(r"[-_]+", stem)
     tags, seen = [], set()
     for p in parts:
@@ -89,6 +103,31 @@ def make_video_poster(rel_path, full_path):
         print("  [WARN] 视频封面生成失败 %s: %s" % (rel_path, e))
         return None
 
+def make_video_preview(rel_path, full_path):
+    """生成约640宽、静音、低码率的小预览视频，供壁纸卡片流畅播放
+    （对标 haowallpaper 的 getVideoReduce）；原图仍保留在 original 字段。"""
+    import shutil, subprocess
+    if not shutil.which("ffmpeg"):
+        return None
+    base = os.path.splitext(rel_path)[0]
+    preview_rel = "images/.thumbs/" + base + ".mp4"
+    preview_full = os.path.join(THUMB_DIR, base + ".mp4")
+    try:
+        os.makedirs(os.path.dirname(preview_full), exist_ok=True)
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", full_path,
+             "-an",
+             "-vf", "scale='min(640,iw)':-2,fps=30",
+             "-c:v", "libx264", "-profile:v", "high", "-pix_fmt", "yuv420p",
+             "-crf", "28", "-preset", "veryfast",
+             "-movflags", "+faststart",
+             preview_full],
+            check=True, capture_output=True, timeout=300)
+        return preview_rel
+    except Exception as e:
+        print("  [WARN] 预览视频生成失败 %s: %s" % (rel_path, e))
+        return None
+
 def collect():
     items = []
     for folder, category in CATEGORIES:
@@ -96,7 +135,7 @@ def collect():
         if not os.path.isdir(cdir):
             continue
         # 直接放在分类文件夹里的图片（默认 tag=simple）
-        for name in sorted(os.listdir(cdir)):
+        for name in sorted(os.listdir(cdir), key=order_key):
             p = os.path.join(cdir, name)
             low = name.lower()
             if os.path.isfile(p):
@@ -107,7 +146,7 @@ def collect():
             # 可选：再下一层以“标签”命名的子文件夹
             elif os.path.isdir(p) and name != ".thumbs":
                 tag = name if name in TAGS else "simple"
-                for sub in sorted(os.listdir(p)):
+                for sub in sorted(os.listdir(p), key=order_key):
                     sp = os.path.join(p, sub)
                     sublow = sub.lower()
                     if os.path.isfile(sp):
@@ -135,18 +174,20 @@ def make_item(category, tag, rel_dir, name, full_path):
     }
 
 def make_video_item(category, tag, rel_dir, name, full_path):
-    """mp4 等动态壁纸：卡片直接用 <video> 静音自动播放。"""
+    """mp4 动态壁纸：卡片用小预览视频（preview），original 保留完整原视频。"""
     rel_path = (rel_dir + "/" + name).replace("\\", "/")
     original = "images/" + rel_path
     poster = make_video_poster(rel_path, full_path)
+    preview = make_video_preview(rel_path, full_path)
     return {
         "title": title_from_name(name),
         "category": category,
         "tag": tag,
         "tags": tags_from_name(name),
         "type": "video",
-        "src": original,
+        "src": preview or original,
         "poster": poster,
+        "preview": preview,
         "original": original,
         "w": None,
         "h": None,
@@ -158,7 +199,7 @@ def prune_thumbs(items):
         return
     valid = set()
     for it in items:
-        for key in ("src", "poster"):
+        for key in ("src", "poster", "preview"):
             v = it.get(key)
             if v and v.startswith("images/.thumbs/"):
                 valid.add(os.path.join(ROOT, v.replace("/", os.sep)))

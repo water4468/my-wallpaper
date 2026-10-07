@@ -83,7 +83,61 @@ body { overflow:hidden; }
   .cta-row { right:-8vw; }
   .count { font-size:120px; }
 }
-@media (max-width:420px) { .nav-links li:nth-child(2) { display:none; } }
+
+/* MUSIC PLAYER */
+.music-nav { position:relative; }
+.music-btn { cursor:pointer; }
+.music-card {
+  position:absolute; top:calc(100% + 14px); left:50%; margin-left:-150px;
+  width:300px; padding:18px 18px 16px;
+  border-radius:18px;
+  background:rgba(24,24,29,0.18);
+  border:1px solid rgba(255,255,255,0.12);
+  backdrop-filter:blur(20px) saturate(1.3);
+  -webkit-backdrop-filter:blur(20px) saturate(1.3);
+  box-shadow:0 12px 40px rgba(0,0,0,0.28);
+  opacity:0; visibility:hidden; transform:translateY(-6px);
+  transition:opacity .25s ease .2s, transform .25s ease .2s, visibility .25s ease .2s;
+  z-index:50;
+}
+/* transparent hover bridge covering the gap + card area, so the card stays
+   open while the pointer travels from the button down to the controls.
+   pointer-events is off until the nav is hovered, so it never blocks the
+   page when the card is closed. */
+.music-bridge { position:absolute; top:100%; left:50%; margin-left:-150px; width:300px; height:224px;
+  pointer-events:none; z-index:40; }
+.music-nav:hover .music-bridge, .music-nav.force-open .music-bridge { pointer-events:auto; }
+.music-nav:hover .music-card, .music-nav.force-open .music-card {
+  opacity:1; visibility:visible; transform:translateY(0);
+  transition-delay:0s;
+}
+.mc-title { font-size:14px; font-weight:600; color:#fff; margin:0 0 14px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; letter-spacing:.01em; }
+.mc-bar { position:relative; width:100%; height:20px; cursor:pointer; margin:0;
+  touch-action:none; outline:none; pointer-events:auto; }
+.mc-bar-track { position:absolute; left:0; right:0; top:50%; transform:translateY(-50%);
+  height:4px; border-radius:4px; background:rgba(255,255,255,0.22); }
+.mc-bar-fill { position:absolute; left:0; top:50%; transform:translateY(-50%);
+  height:4px; border-radius:4px; background:#fff; width:0; }
+.mc-bar-thumb { position:absolute; top:50%; left:0; width:14px; height:14px;
+  margin-left:-7px; border-radius:50%; background:#fff; transform:translateY(-50%);
+  box-shadow:0 0 6px rgba(0,0,0,.3); }
+.mc-bar:focus-visible .mc-bar-thumb { box-shadow:0 0 0 4px rgba(255,255,255,0.25); }
+.mc-time { display:flex; justify-content:space-between; font-size:11px;
+  color:rgba(255,255,255,0.72); margin-top:8px; font-variant-numeric:tabular-nums; }
+.mc-controls { display:flex; align-items:center; justify-content:space-between; margin-top:14px; }
+.mc-ctrl { background:none; border:none; color:#fff; cursor:pointer; padding:6px;
+  display:flex; align-items:center; justify-content:center;
+  opacity:.92; transition:opacity .2s, transform .15s, background .2s; }
+.mc-ctrl:hover { opacity:1; transform:scale(1.08); }
+.mc-ctrl svg { width:26px; height:26px; }
+.mc-play { width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,0.14); }
+.mc-play svg { width:22px; height:22px; }
+.mc-play:hover { background:rgba(255,255,255,0.24); }
+@media (max-width:480px) {
+  .music-card { width:264px; left:auto; right:0; margin-left:0; }
+  .music-bridge { left:auto; right:0; margin-left:0; width:264px; }
+}
 </style>
 </head>
 <body>
@@ -96,7 +150,31 @@ body { overflow:hidden; }
       <a href="#" class="logo"><i class="logo-mark"></i><b>Design</b><span>World</span></a>
       <ul class="nav-links">
         <li><a href="#" id="modelSwitch">模型更换</a></li>
-        <li><a>发现</a></li>
+        <li class="music-nav" id="musicNav">
+          <a class="music-btn" id="musicToggle">音乐</a>
+          <span class="music-bridge" aria-hidden="true"></span>
+          <div class="music-card" id="musicCard">
+            <p class="mc-title" id="mcTitle">—</p>
+            <div class="mc-bar" id="mcBar" role="slider" tabindex="0"
+                 aria-label="播放进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <div class="mc-bar-track"></div>
+              <div class="mc-bar-fill" id="mcBarFill"></div>
+              <div class="mc-bar-thumb" id="mcBarThumb"></div>
+            </div>
+            <div class="mc-time"><span id="mcCur">00:00</span><span id="mcDur">00:00</span></div>
+            <div class="mc-controls">
+              <button class="mc-ctrl" id="mcPrev" aria-label="上一首">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2.5v12H6zm4 6 9 6V6z"/></svg>
+              </button>
+              <button class="mc-ctrl mc-play" id="mcPlay" aria-label="播放">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              </button>
+              <button class="mc-ctrl" id="mcNext" aria-label="下一首">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 6H18v12h-2.5zM5 6v12l9-6z"/></svg>
+              </button>
+            </div>
+          </div>
+        </li>
         <li><a>关于我们</a></li>
       </ul>
     </header>
@@ -883,6 +961,150 @@ body { overflow:hidden; }
     ]),
     new Promise((r) => setTimeout(r, 2500))
   ]).then(start);
+})();
+</script>
+
+<script>
+/* Background music player: starts paused; hover "音乐" to open the card.
+   A track ending auto-advances. The custom progress bar supports click and
+   drag with mouse and touch. */
+(function () {
+  'use strict';
+  var FILES = [
+    'City - 羽肿.mp3',
+    'Flower Dance - DJ OKAWARI.mp3',
+    '卡农（经典钢琴版） - dylanf.mp3',
+    '若如初见（纯享版） - 秋成.mp3'
+  ];
+
+  var nav = document.getElementById('musicNav');
+  var toggle = document.getElementById('musicToggle');
+  var titleEl = document.getElementById('mcTitle');
+  var bar = document.getElementById('mcBar');
+  var fillEl = document.getElementById('mcBarFill');
+  var thumbEl = document.getElementById('mcBarThumb');
+  var curEl = document.getElementById('mcCur');
+  var durEl = document.getElementById('mcDur');
+  var playBtn = document.getElementById('mcPlay');
+
+  var audio = new Audio();
+  audio.preload = 'metadata';
+  var idx = 0;
+  var dragging = false;
+  var settling = false;
+
+  var ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+  var ICON_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>';
+
+  function fmt(t) {
+    if (isNaN(t) || t < 0) return '00:00';
+    var m = Math.floor(t / 60), s = Math.floor(t % 60);
+    return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+  function trackName(i) { return FILES[i].replace(/\.mp3$/i, ''); }
+  function ratioFromX(clientX) {
+    var rect = bar.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  }
+  function setBar(ratio) {
+    ratio = Math.max(0, Math.min(1, ratio));
+    var pct = (ratio * 100) + '%';
+    fillEl.style.width = pct;
+    thumbEl.style.left = pct;
+    bar.setAttribute('aria-valuenow', Math.round(ratio * 100));
+  }
+  function setPlayIcon(playing) {
+    playBtn.innerHTML = playing ? ICON_PAUSE : ICON_PLAY;
+    playBtn.setAttribute('aria-label', playing ? '暂停' : '播放');
+  }
+  function load(i, autoplay) {
+    idx = (i + FILES.length) % FILES.length;
+    audio.src = './assets/music/' + encodeURIComponent(FILES[idx]);
+    titleEl.textContent = trackName(idx);
+    setBar(0);
+    curEl.textContent = '00:00'; durEl.textContent = '00:00';
+    setPlayIcon(false);
+    if (autoplay) audio.play().catch(function () {});
+  }
+  function togglePlay() {
+    if (audio.paused) audio.play().catch(function () {});
+    else audio.pause();
+  }
+
+  audio.addEventListener('play', function () { setPlayIcon(true); });
+  audio.addEventListener('pause', function () { setPlayIcon(false); });
+  audio.addEventListener('loadedmetadata', function () { durEl.textContent = fmt(audio.duration); });
+  audio.addEventListener('timeupdate', function () {
+    if (audio.duration && !dragging && !settling) {
+      setBar(audio.currentTime / audio.duration);
+      curEl.textContent = fmt(audio.currentTime);
+    }
+  });
+  audio.addEventListener('seeked', function () {
+    settling = false;
+    if (audio.duration) {
+      setBar(audio.currentTime / audio.duration);
+      curEl.textContent = fmt(audio.currentTime);
+    }
+  });
+  audio.addEventListener('ended', function () { load(idx + 1, true); });
+
+  /* pointer down = click or start drag; pointer capture keeps it alive. */
+  bar.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    dragging = true;
+    try { bar.setPointerCapture(e.pointerId); } catch (err) {}
+    var r = ratioFromX(e.clientX);
+    setBar(r);
+    if (audio.duration) curEl.textContent = fmt(r * audio.duration);
+  });
+  bar.addEventListener('pointermove', function (e) {
+    if (!dragging) return;
+    var r = ratioFromX(e.clientX);
+    setBar(r);
+    if (audio.duration) curEl.textContent = fmt(r * audio.duration);
+  });
+  function endDrag(e) {
+    if (!dragging) return;
+    var r = ratioFromX(e.clientX);
+    setBar(r);
+    dragging = false;
+    if (audio.duration) { settling = true; audio.currentTime = r * audio.duration; }
+  }
+  bar.addEventListener('pointerup', endDrag);
+  bar.addEventListener('pointercancel', function () { dragging = false; });
+
+  /* keyboard accessibility */
+  bar.addEventListener('keydown', function (e) {
+    if (!audio.duration) return;
+    if (e.key === 'Home') { audio.currentTime = 0; e.preventDefault(); return; }
+    if (e.key === 'End') { audio.currentTime = audio.duration; e.preventDefault(); return; }
+    var dir = 0;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') dir = 1;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') dir = -1;
+    else return;
+    e.preventDefault();
+    audio.currentTime = Math.max(0, Math.min(audio.duration,
+      audio.currentTime + dir * 0.02 * audio.duration));
+  });
+
+  playBtn.addEventListener('click', togglePlay);
+  document.getElementById('mcPrev').addEventListener('click', function () { load(idx - 1, true); });
+  document.getElementById('mcNext').addEventListener('click', function () { load(idx + 1, true); });
+
+  /* Desktop: hover opens the card (pure CSS). Touch / no-hover: tap to toggle. */
+  var noHover = window.matchMedia('(hover: none)').matches;
+  if (noHover) {
+    toggle.addEventListener('click', function (e) {
+      e.preventDefault();
+      nav.classList.toggle('force-open');
+    });
+    document.addEventListener('click', function (e) {
+      if (!nav.contains(e.target)) nav.classList.remove('force-open');
+    });
+  }
+
+  load(0, false); /* initial state: paused */
 })();
 </script>
 </body>

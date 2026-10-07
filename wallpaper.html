@@ -525,7 +525,7 @@
       const src = w.src || w.original;
       const poster = w.poster ? ' poster="' + w.poster + '"' : '';
       return '<video class="card-media"' + phoneStyle + ' src="' + src + '"' + poster +
-        ' muted loop autoplay playsinline webkit-playsinline preload="auto"' +
+        ' muted loop playsinline webkit-playsinline preload="none"' +
         ' disablepictureinpicture controlslist="nodownload noremoteplayback"></video>';
     }
     const src = w.src || ('https://picsum.photos/seed/' + w.seed + '/600/' + w.h);
@@ -607,11 +607,32 @@
     sessionStorage.removeItem('wallpaperState');
   }
 
+  /* Performance: small preview videos load & play only while their card is
+     visible in the viewport; off-screen cards show just the poster image, so
+     only a handful of (640px) videos decode at the same time. */
+  let videoObserver = null;
+  function ensureVideoObserver() {
+    if (videoObserver) return videoObserver;
+    videoObserver = new IntersectionObserver((entries) => {
+      entries.forEach(en => {
+        const v = en.target;
+        if (en.isIntersecting && en.intersectionRatio >= 0.5) {
+          v.muted = true;
+          const p = v.play(); if (p && p.catch) p.catch(() => {});
+        } else if (!v.paused) {
+          v.pause();
+        }
+      });
+    }, { threshold: [0.25, 0.5, 0.75] });
+    return videoObserver;
+  }
+
   function renderCards() {
     const isPhoneView = (activeFilter || '').indexOf('phone') === 0;
     grid.classList.toggle('phone-mode', isPhoneView);
     document.getElementById('pagination').classList.toggle('phone-rail', isPhoneView);
     grid.innerHTML = '';
+    if (videoObserver) { videoObserver.disconnect(); videoObserver = null; }
     const list = currentList();
     const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
     if (currentPage > totalPages) currentPage = totalPages;
@@ -643,10 +664,8 @@
       // hide the whole card if the media fails to load (file deleted but manifest stale)
       media.addEventListener('error', () => { card.style.display = 'none'; });
       if (isVideoItem(w)) {
-        // muted autoplay (autoplay requires muted); call play() as a fallback
-        media.muted = true;
-        const p = media.play();
-        if (p && p.catch) p.catch(() => {});
+        // The small preview loads & plays only while the card is on screen.
+        ensureVideoObserver().observe(media);
         // phone masonry: once metadata is known, reserve space at the real ratio
         if ((w.category || '').indexOf('phone') === 0) {
           media.addEventListener('loadedmetadata', () => {
