@@ -207,8 +207,6 @@ body { overflow:hidden; }
 <script src="./assets/model/rose-data.js"></script>
 <script src="./assets/model/planet-data.js"></script>
 <script src="./assets/model/ring-data.js"></script>
-<script src="./assets/background/rem-bg-data.js"></script>
-<script src="./assets/background/bg-presets-data.js"></script>
 <script>
 (function () {
   'use strict';
@@ -251,13 +249,8 @@ body { overflow:hidden; }
     { eye: { x: 0.575, y: 0.275 },  src: './assets/background/rem-bg.jpg' },
     { eye: null,                    src: './assets/background/bg-neon.jpg' }
   ];
-  // Under file://, local image paths would taint the canvas; use embedded data
-  // URIs (window.BG_PRESET_DATA) whenever available.
-  if (Array.isArray(window.BG_PRESET_DATA)) {
-    BG_PRESETS.forEach((p, i) => {
-      if (typeof window.BG_PRESET_DATA[i] === 'string') p.src = window.BG_PRESET_DATA[i];
-    });
-  }
+  // Backgrounds load on demand from the compressed JPG files: only the first
+  // one is fetched up front; switching loads (and the browser caches) the rest.
   let bgIndex = 1;
   let bgReady = false;
   let bgOffsetX = 0, bgOffsetY = 0;
